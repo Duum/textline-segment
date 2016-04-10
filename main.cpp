@@ -8,39 +8,47 @@
 #include <opencv2/core.hpp>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "anigauss.h"
+#include "anigauss.c"
+
+
 
 using namespace cv;
 using namespace std;
 
-class floatarray
+#define THETA 45
+#define SIG_WT_X 1.0
+#define SIG_WT_Y 1.0
+
+class doublearray
 {
     public:
         int row;
         int col;
-        float **data;
+        double **data;
 
     public:
-        floatarray(){}
-        floatarray( const floatarray& other):
+        doublearray(){}
+        doublearray( const doublearray& other):
             row( other.row ), col( other.col ), data (other.data)
         {}
 
-        floatarray(const Mat& img){
+        doublearray(const Mat& img){
             row = img.rows;
             col = img.cols;
 
-            data = new float* [img.rows];
+            data = new double* [img.rows];
             for(int i = 0; i < img.rows; i++)
             {
-                 data[i] = new float[img.cols];
+                 data[i] = new double[img.cols];
                  for(int j = 0; j < img.cols; j++)
-                       data[i][j] = (float)(img.at<uchar>(i,j));
+                       data[i][j] = (double)(img.at<uchar>(i,j));
             }
         }
 
-        float& operator()(const int row, const int col);
+        double& operator()(const int row, const int col);
 
-        ~floatarray()
+        ~doublearray()
         {
             for(int i = 0; i < row; i++)
                 delete[] data[i];
@@ -48,22 +56,27 @@ class floatarray
         }
 };
 
-float& floatarray::operator()(const int row, const int col)
+inline double MAX_D(double a, double b)
+{
+    return (a>b)?a:b;
+}
+
+double& doublearray::operator()(const int row, const int col)
 {
     return (data[row][col]);
 }
 
-inline float ext(floatarray img, int x, int y)
+inline double ext(doublearray img, int x, int y)
 {
     return img.data[x][y];
 }
 
-float ext1(floatarray img, int x, int y)
+double ext1(doublearray img, int x, int y)
 {
     int w = img.row;
     int h = img.col;
 
-    float val = 0.0;
+    double val = 0.0;
 
     if( (x < 0) || (y < 0) || (x >= w) || (y >= h))
         val = 0.0;
@@ -73,17 +86,17 @@ float ext1(floatarray img, int x, int y)
     return val;
 }
 
-void makelike(floatarray *dst, floatarray src)
+void makelike(doublearray *dst, doublearray src)
 {
     dst->row = src.row;
     dst->col = src.col;
 
-    dst->data = new float* [dst->row];
+    dst->data = new double* [dst->row];
     for(int i = 0; i < dst->row; i++)
-        (dst->data)[i] = new float[dst->col];
+        (dst->data)[i] = new double[dst->col];
 }
 
-void fill(floatarray *dst, int key)
+void fill(doublearray *dst, int key)
 {
     int w = dst->row;
     int h = dst->col;
@@ -93,18 +106,18 @@ void fill(floatarray *dst, int key)
             (dst->data)[i][j] = key;
 }
 
-floatarray load_data(Mat img)
+doublearray load_data(Mat img)
 {
-    floatarray obj;
+    doublearray obj;
     obj.row = img.rows;
     obj.col = img.cols;
 
-    obj.data = new float* [img.rows];
+    obj.data = new double* [img.rows];
     for(int i = 0; i < img.rows; i++)
     {
-         obj.data[i] = new float[img.cols];
+         obj.data[i] = new double[img.cols];
          for(int j = 0; j < img.cols; j++)
-               obj.data[i][j] = (float)(img.at<uchar>(i,j));
+               obj.data[i][j] = (double)(img.at<uchar>(i,j));
     }
 
     return obj;
@@ -115,12 +128,12 @@ floatarray load_data(Mat img)
 
 namespace RidgeDetect {
     struct RidgeDetector {
-        floatarray &mk2;
-        floatarray mk1;
-        floatarray mpx;
-        floatarray mpy;
-        floatarray mdx;
-        floatarray mdy;
+        doublearray &mk2;
+        doublearray mk1;
+        doublearray mpx;
+        doublearray mpy;
+        doublearray mdx;
+        doublearray mdy;
         int dummy;
 
 
@@ -160,7 +173,7 @@ namespace RidgeDetect {
         #undef a
         }
 
-        RidgeDetector Eigens(floatarray im, floatarray zeros, floatarray angle)
+        RidgeDetector Eigens(doublearray im, doublearray zeros, doublearray angle)
         {
 
             makelike(&mk2, im);
@@ -178,25 +191,25 @@ namespace RidgeDetect {
             {
                 for(int y = h-2; h > 0; y--)
                 {
-                    float ndx = 0.5 *(ext(im, x + 1, y) - ext(im, x - 1, y));
-                    float ndy = 0.5 *(ext(im, x, y + 1) - ext(im, x, y - 1));
-                    float t= vis_hypot(ndx, ndy);
+                    double ndx = 0.5 *(ext(im, x + 1, y) - ext(im, x - 1, y));
+                    double ndy = 0.5 *(ext(im, x, y + 1) - ext(im, x, y - 1));
+                    double t= vis_hypot(ndx, ndy);
                     if (!t)
                         t = 1.0;
 
-                    float dx = ndx / t;
-                    float dy = ndy / t;
+                    double dx = ndx / t;
+                    double dy = ndy / t;
 
-                    float dxx = ext(im, x - 1, y) + ext(im, x + 1, y) - 2.0 * ext(im, x, y);
-                    float dxy = .25 *(ext(im, x - 1, y - 1) - ext(im, x - 1, y + 1) - ext(im, x + 1, y - 1) + ext(im, x + 1, y + 1));
-                    float dyy = ext(im, x, y - 1) + ext(im, x, y + 1) - 2.0 * ext(im, x, y);
-                    float di2 = dyy * dyy - 2 * dxx * dyy + 4 * dxy * dxy + dxx * dxx;
-                    float di = sqrt(fabs(di2));
-                    float k2 =(-di + dyy + dxx) / 2.0;
-                    float k1 =(di + dyy + dxx) / 2.0;
-                    float ny2 = dxy ? -(di - dyy + dxx) / dxy / 2.0 : 0.0;
-                    float x2 = 1.0 /(t = vis_hypot(1.0, ny2));
-                    float y2 = ny2 / t;
+                    double dxx = ext(im, x - 1, y) + ext(im, x + 1, y) - 2.0 * ext(im, x, y);
+                    double dxy = .25 *(ext(im, x - 1, y - 1) - ext(im, x - 1, y + 1) - ext(im, x + 1, y - 1) + ext(im, x + 1, y + 1));
+                    double dyy = ext(im, x, y - 1) + ext(im, x, y + 1) - 2.0 * ext(im, x, y);
+                    double di2 = dyy * dyy - 2 * dxx * dyy + 4 * dxy * dxy + dxx * dxx;
+                    double di = sqrt(fabs(di2));
+                    double k2 =(-di + dyy + dxx) / 2.0;
+                    double k1 =(di + dyy + dxx) / 2.0;
+                    double ny2 = dxy ? -(di - dyy + dxx) / dxy / 2.0 : 0.0;
+                    double x2 = 1.0 /(t = vis_hypot(1.0, ny2));
+                    double y2 = ny2 / t;
 
                     mk1.data[x][y] = k1;
                     mk2.data[x][y] = k2;
@@ -221,10 +234,94 @@ namespace RidgeDetect {
     };
 }
 
+cv::Point getParams(Mat img2)
+{
+
+    Mat img(img2);
+    Canny(img, img, 100, 200, 3);
+    /// Find contours
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+
+    findContours( img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+
+    vector<int> height;
+    vector<int> width;
+
+    for(int i = 0; i < contours.size(); i++){
+        width.push_back( (contours[i][1]).x - (contours[i][0]).x);
+        height.push_back( (contours[i][1]).y - (contours[i][0]).y);
+    }
+
+    sort(width.begin(), width.begin()+width.size());
+    sort(height.begin(), height.begin()+height.size());
+
+    int wd = width[ width.size()/2 -1 + width.size()%2];
+    int ht = height[ height.size()/2 -1 + height.size()%2];
+
+    return cv::Point(wd, ht);
+
+
+}
+
+void applyFilter(Mat img)
+{
+    Mat img_gray;
+    cvtColor(img, img_gray, CV_BGR2GRAY);
+    doublearray testObj(img_gray);
+
+//    threshold( img_gray, img_gray, 80, 255, 0 );
+
+    SRCTYPE *inparr = new SRCTYPE [testObj.row * testObj.col];
+    DSTTYPE *outarr = new DSTTYPE [testObj.row * testObj.col];
+    DSTTYPE *tmparr = new DSTTYPE [testObj.row * testObj.col];
+
+    int k = 0;
+    for(int i = 0 ; i < testObj.row; i++)
+        for(int j = 0 ; j < testObj.col; j++)
+        {
+            tmparr[k] = 0.0;
+            outarr[k] = 0.0;
+            inparr[k++] = testObj(i,j);
+
+
+        }
+
+    Mat img2(testObj.row, testObj.col, CV_64F);
+    Mat imgcon;
+
+    cv::Point dim;
+    dim = getParams( img_gray );
+
+    for(double sigX = 0.8; sigX <= SIG_WT_X*dim.x; sigX += 0.1)
+        for(double sigY = 0.8; sigY <= SIG_WT_Y*dim.y; sigY += 0.1)
+            for(int th = -THETA; th <= THETA; th += 1)
+    {
+        anigauss(inparr, tmparr, testObj.row, testObj.col, sigX, sigY, th, 1, 1);
+        for(int k = 0; k < testObj.col*testObj.row; k++)
+            outarr[k] = MAX_D(outarr[k], tmparr[k]);
+
+    }
+
+    k = 0;
+    for(int i = 0 ; i < testObj.row; i++)
+        for(int j = 0 ; j < testObj.col; j++)
+            img2.at<double>(i,j) = outarr[k++];
+
+
+
+    namedWindow("Input", WINDOW_AUTOSIZE);
+    namedWindow("Output", WINDOW_AUTOSIZE);
+    imshow("Input", img);
+    imshow("Output", img2);
+    imwrite("input.jpg", img_gray);
+    imwrite("output.jpg", img2);
+
+}
 
 int main()
 {
-    Mat img = imread("rice.bmp");
+    Mat img = imread("dave1.png");
 
     if( img.empty())
     {
@@ -232,7 +329,10 @@ int main()
         return -1;
     }
 
-    floatarray testObj(img);
+
+
+    applyFilter(img);
+    cvWaitKey(0);
 
     return 0;
 }
