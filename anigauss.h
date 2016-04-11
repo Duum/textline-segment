@@ -45,7 +45,8 @@ static void f_iir_tline_filter(DSTTYPE *src, DSTTYPE *dest, int sx, int sy,
     double *filter, double tanp);
 static void f_iir_derivative_filter(DSTTYPE *src, DSTTYPE *dest, int sx, int sy,
     double phi, int order);
-
+static void f_iir_linear_filter(DSTTYPE *src, DSTTYPE *dest, int sx, int sy,
+    double phi);
 
 
 

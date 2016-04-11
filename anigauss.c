@@ -18,6 +18,15 @@
 #endif
 #endif
 
+void lineavg(SRCTYPE *input, DSTTYPE *output, int sizex, int sizey, double phi, int orderu, int orderv)
+{
+    double phirad = phi*PI/180.;
+
+    for(int i=0; i<orderv; i++)
+        f_iir_linear_filter(input, output, sizex, sizey, phirad-PI/2.);
+    for(int i=0; i<orderu; i++)
+        f_iir_linear_filter(output, output, sizex, sizey, phirad);
+}
 
 void anigauss(SRCTYPE *input, DSTTYPE *output, int sizex, int sizey,
     double sigmav, double sigmau, double phi, int orderv, int orderu)
@@ -560,6 +569,50 @@ f_iir_derivative_filter(DSTTYPE *src, DSTTYPE *dest, int sx, int sy,
             *pstore++ = cc;
         }
         *dest++ = sinp*(pc-nc)+cosp*(cn-cp);
+        prev = buf;
+        if (i==sy-2)
+            next -= sx;
+    }
+
+   free(buf);
+}
+
+/* rotated [-1,0,1] derivative filter */
+static void
+f_iir_linear_filter(DSTTYPE *src, DSTTYPE *dest, int sx, int sy,
+    double phi)
+{
+   int				i, j;
+   DSTTYPE   *prev, *center, *next;
+   DSTTYPE   *buf, *pstore;
+   double  pn, pc, pp;
+   double  cn, cc, cp;
+   double  nn, nc, np;
+   double  cosp, sinp;
+
+   buf = (DSTTYPE *)malloc(sx*sizeof(DSTTYPE));
+
+   sinp = 0.5*sin(phi); cosp = 0.5*cos(phi);
+
+   center = src; prev = src; next = src+sx;
+   for (i = 0; i < sy; i++) {
+        pstore = buf;
+        pn = *prev++; cn = *center++; nn = *next++;
+        pp = pn; pc = pn;
+        cp = cn; cc = cn;
+        np = pn; nc = nn;
+        *pstore++ = cc;
+        for (j = 1; j < sx; j++) {
+            pn = *prev++;
+            cn = *center++;
+            nn = *next++;
+            *dest++ = 0.5*sinp*(pc+nc)+0.5*cosp*(cn+cp);
+            pp = pc; pc = pn;
+            cp = cc; cc = cn;
+            np = pc; nc = nn;
+            *pstore++ = cc;
+        }
+        *dest++ = 0.5*sinp*(pc+nc)+0.5*cosp*(cn+cp);
         prev = buf;
         if (i==sy-2)
             next -= sx;

@@ -264,7 +264,9 @@ cv::Point getParams(Mat img2)
 
 }
 
-void applyFilter(Mat img)
+
+
+void applyGaussFilter(Mat img)
 {
     Mat img_gray;
     cvtColor(img, img_gray, CV_BGR2GRAY);
@@ -319,6 +321,58 @@ void applyFilter(Mat img)
 
 }
 
+void applyLinearFilter(Mat img)
+{
+    Mat img_gray;
+    cvtColor(img, img_gray, CV_BGR2GRAY);
+    doublearray testObj(img_gray);
+
+//    threshold( img_gray, img_gray, 80, 255, 0 );
+
+    SRCTYPE *inparr = new SRCTYPE [testObj.row * testObj.col];
+    DSTTYPE *outarr = new DSTTYPE [testObj.row * testObj.col];
+    DSTTYPE *tmparr = new DSTTYPE [testObj.row * testObj.col];
+
+    int k = 0;
+    for(int i = 0 ; i < testObj.row; i++)
+        for(int j = 0 ; j < testObj.col; j++)
+        {
+            tmparr[k] = 0.0;
+            outarr[k] = 0.0;
+            inparr[k++] = testObj(i,j);
+
+
+        }
+
+    Mat img2(testObj.row, testObj.col, CV_64F);
+    Mat imgcon;
+
+    cv::Point dim;
+    dim = getParams( img_gray );
+
+    for(int th = -THETA; th <= THETA; th += 1)
+    {
+        lineavg(inparr, tmparr, testObj.row, testObj.col, th, 1, 1);
+        for(int k = 0; k < testObj.col*testObj.row; k++)
+            outarr[k] = MAX_D(outarr[k], tmparr[k]);
+    }
+
+    k = 0;
+    for(int i = 0 ; i < testObj.row; i++)
+        for(int j = 0 ; j < testObj.col; j++)
+            img2.at<double>(i,j) = outarr[k++];
+
+
+
+    namedWindow("Input", WINDOW_AUTOSIZE);
+    namedWindow("Output", WINDOW_AUTOSIZE);
+    imshow("Input", img);
+    imshow("Output", img2);
+    imwrite("input.jpg", img_gray);
+    imwrite("output.jpg", img2);
+
+}
+
 int main()
 {
     Mat img = imread("dave1.png");
@@ -331,7 +385,8 @@ int main()
 
 
 
-    applyFilter(img);
+    //applyGaussFilter(img);
+    applyLinearFilter(img);
     cvWaitKey(0);
 
     return 0;
